@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
 import {
   bookmarkletInputPath,
   buildBookmarklet,
@@ -41,5 +42,5 @@ function bookmarkletPlugin() {
 
 export default defineConfig({
   base: '/youtube-transcript-bookmarklet/',
-  plugins: [bookmarkletPlugin()],
+  plugins: [react(), bookmarkletPlugin()],
 });

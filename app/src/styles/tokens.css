@@ -1,0 +1,15 @@
+:root {
+  color-scheme: dark;
+  font-family: "Avenir Next", Inter, "Segoe UI Variable", "Segoe UI", sans-serif;
+  background:
+    radial-gradient(circle at top left, rgba(46, 211, 246, 0.05), transparent 24%),
+    #090d18;
+  color: #f8fafc;
+  --surface: rgba(13, 19, 35, 0.96);
+  --line: rgba(143, 160, 189, 0.16);
+  --muted: #b8c4d9;
+  --subtle: #8b9bb5;
+  --accent: #2ed3f6;
+  --shadow: 0 18px 40px rgba(0, 0, 0, 0.18);
+  --radius: 26px;
+}

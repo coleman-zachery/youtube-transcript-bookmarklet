@@ -1,0 +1,30 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100svh;
+}
+
+body {
+  margin: 0;
+  display: grid;
+  place-items: center;
+  min-height: 100svh;
+  padding: clamp(12px, 1.8vw, 20px);
+  overflow: hidden;
+}
+
+#app {
+  display: grid;
+  place-items: center;
+  width: 100%;
+}
+
+@media (max-width: 720px) {
+  body {
+    padding: 12px;
+    overflow: auto;
+  }
+}

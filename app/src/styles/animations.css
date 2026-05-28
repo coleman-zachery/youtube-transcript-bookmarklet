@@ -1,0 +1,62 @@
+.workspace:not(.is-bookmarklet-hovered):not(.is-dragging-bookmarklet) .bookmarklet {
+  animation: bookmarklet-lift 2.4s ease-out 1;
+}
+
+.bookmarklet:hover,
+.bookmarklet:focus-visible {
+  transform: translateY(-2px);
+  box-shadow:
+    0 12px 24px rgba(8, 15, 31, 0.22),
+    0 0 0 3px rgba(46, 211, 246, 0.08);
+}
+
+.bookmarklet:active {
+  transform: translateY(0);
+  cursor: grabbing;
+}
+
+.bookmarklet:focus-visible {
+  outline: none;
+}
+
+.workspace.is-bookmarklet-hovered .bookmarklet,
+.workspace.is-dragging-bookmarklet .bookmarklet {
+  box-shadow:
+    0 12px 24px rgba(8, 15, 31, 0.24),
+    0 0 0 3px rgba(46, 211, 246, 0.08);
+}
+
+.workspace.is-dragging-bookmarklet .bookmarklet {
+  transform: translateY(-4px);
+  cursor: grabbing;
+  animation: none !important;
+}
+
+@keyframes bookmarklet-lift {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  18% {
+    transform: translateY(-2px) rotate(-0.4deg);
+  }
+
+  36% {
+    transform: translateY(0) rotate(0.4deg);
+  }
+
+  54% {
+    transform: translateY(-1px) rotate(-0.3deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

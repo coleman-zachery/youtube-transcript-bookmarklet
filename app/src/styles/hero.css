@@ -1,0 +1,28 @@
+.hero {
+  display: grid;
+  gap: 12px;
+}
+
+h1 {
+  margin: 0;
+  font-family: "Avenir Next Condensed", "Avenir Next", Inter, sans-serif;
+  font-size: clamp(1.95rem, 4vw, 2.95rem);
+  line-height: 0.96;
+  letter-spacing: -0.045em;
+}
+
+.cta {
+  display: grid;
+  justify-items: start;
+}
+
+@media (max-width: 720px) {
+  .hero {
+    gap: 10px;
+  }
+
+  h1 {
+    font-size: clamp(1.8rem, 9vw, 2.5rem);
+    line-height: 0.94;
+  }
+}
