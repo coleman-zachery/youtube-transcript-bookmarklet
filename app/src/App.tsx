@@ -27,7 +27,7 @@ function App() {
 
       <main className={workspaceClassName}>
         <section className="card">
-          <h1>Copy YouTube Transcripts.</h1>
+          <h1>Copy YouTube Transcripts</h1>
 
           <div className="content-row">
             <HeroPanel

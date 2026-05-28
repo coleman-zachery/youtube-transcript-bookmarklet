@@ -1,6 +1,6 @@
 # YouTube Transcript Copier
 
-[Open the bookmarklet page](https://coleman-zachery.github.io/youtube-transcript-bookmarklet/) · [GitHub Public Repo](https://github.com/coleman-zachery/youtube-transcript-bookmarklet)
+[Open the bookmarklet page](https://coleman-zachery.github.io/youtube-transcript-bookmarklet/)
 
 Copy YouTube transcripts with a bookmarklet.
 
