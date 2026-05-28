@@ -15,8 +15,95 @@ export const bookmarkletInputPath = path.join(
 );
 export const bookmarkletOutputPath = path.join(appRoot, 'src/bookmarklet.ts');
 
+function compactCssSegment(segment) {
+  return segment
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\s+/g, ' ')
+    .replace(/\s*([{}:;,>])\s*/g, '$1')
+    .trim();
+}
+
+function compactTaggedTemplateBody(templateBody) {
+  let output = '';
+  let cursor = 0;
+
+  while (cursor < templateBody.length) {
+    const expressionStart = templateBody.indexOf('${', cursor);
+
+    if (expressionStart === -1) {
+      output += compactCssSegment(templateBody.slice(cursor));
+      break;
+    }
+
+    output += compactCssSegment(templateBody.slice(cursor, expressionStart));
+
+    let depth = 1;
+    let expressionEnd = expressionStart + 2;
+
+    while (expressionEnd < templateBody.length && depth > 0) {
+      const char = templateBody[expressionEnd];
+      if (char === '{') {
+        depth += 1;
+      } else if (char === '}') {
+        depth -= 1;
+      }
+      expressionEnd += 1;
+    }
+
+    output += templateBody.slice(expressionStart, expressionEnd);
+    cursor = expressionEnd;
+  }
+
+  return output;
+}
+
+function compactStyleTemplates(source) {
+  const marker = 'style.textContent = `';
+  let output = '';
+  let searchStart = 0;
+
+  while (searchStart < source.length) {
+    const markerIndex = source.indexOf(marker, searchStart);
+
+    if (markerIndex === -1) {
+      output += source.slice(searchStart);
+      break;
+    }
+
+    output += source.slice(searchStart, markerIndex + marker.length);
+
+    let cursor = markerIndex + marker.length;
+    let templateBody = '';
+
+    while (cursor < source.length) {
+      const char = source[cursor];
+
+      if (char === '\\') {
+        templateBody += source.slice(cursor, cursor + 2);
+        cursor += 2;
+        continue;
+      }
+
+      if (char === '`') {
+        break;
+      }
+
+      templateBody += char;
+      cursor += 1;
+    }
+
+    output += compactTaggedTemplateBody(templateBody);
+    output += '`';
+    searchStart = cursor + 1;
+  }
+
+  return output;
+}
+
 export async function buildBookmarklet() {
-  const source = fs.readFileSync(bookmarkletInputPath, 'utf8').trim();
+  const source = compactStyleTemplates(
+    fs.readFileSync(bookmarkletInputPath, 'utf8').trim()
+  );
   const result = await minify(source, {
     compress: {
       defaults: true,

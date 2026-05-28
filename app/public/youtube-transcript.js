@@ -7,6 +7,9 @@
   const text = (node) => node?.textContent?.replace(/\s+/g, ' ').trim() || '';
   const runtimeId = 'yt-transcript-copier-toast';
   const styleId = `${runtimeId}-style`;
+  const homeUrl = 'https://coleman-zachery.github.io/youtube-transcript-bookmarklet/';
+  let activeToast = null;
+  let activeRunId = 0;
   const transcriptPanelSelectors = [
     'ytd-engagement-panel-section-list-renderer[target-id="PAmodern_transcript_view"]',
     'ytd-engagement-panel-section-list-renderer[target-id="engagement-panel-searchable-transcript"]',
@@ -46,7 +49,7 @@
         width: min(360px, calc(100vw - 24px));
         padding: 16px 18px;
         border: 1px solid rgba(125, 146, 184, 0.2);
-        border-radius: 18px;
+        border-radius: 0;
         background: rgba(11, 16, 30, 0.94);
         color: #f8fafc;
         box-shadow: 0 22px 56px rgba(0, 0, 0, 0.32);
@@ -67,7 +70,6 @@
         position: absolute;
         inset: 0 auto 0 0;
         width: 3px;
-        border-radius: 18px 0 0 18px;
         background: var(--toast-accent, #2ed3f6);
       }
 
@@ -105,7 +107,8 @@
 
       .ytc-kicker,
       .ytc-title,
-      .ytc-detail {
+      .ytc-detail,
+      .ytc-subdetail {
         margin: 0;
       }
 
@@ -115,6 +118,15 @@
         font-weight: 800;
         letter-spacing: 0.14em;
         text-transform: uppercase;
+      }
+
+      .ytc-kicker-link {
+        color: #7dd3fc;
+        text-decoration: none;
+      }
+
+      .ytc-kicker-link:hover {
+        text-decoration: underline;
       }
 
       .ytc-title {
@@ -127,6 +139,41 @@
       .ytc-detail {
         margin-top: 4px;
         color: #cbd5e1;
+      }
+
+      .ytc-subdetail {
+        margin-top: 8px;
+        color: #9fb1cb;
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .ytc-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      .ytc-action {
+        border: 1px solid rgba(125, 146, 184, 0.26);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.04);
+        color: #f8fafc;
+        padding: 8px 12px;
+        font: inherit;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .ytc-action:hover {
+        background: rgba(255, 255, 255, 0.08);
+      }
+
+      .ytc-action:focus-visible {
+        outline: 2px solid rgba(56, 189, 248, 0.5);
+        outline-offset: 2px;
       }
 
       .ytc-spinner {
@@ -197,30 +244,183 @@
     return [];
   };
 
-  const showToast = ({ tone, title, detail }) => {
+  const isYouTubeHost = () => {
+    const host = window.location.hostname.toLowerCase();
+    return (
+      host === 'youtube.com' ||
+      host.endsWith('.youtube.com') ||
+      host === 'youtu.be' ||
+      host.endsWith('.youtu.be')
+    );
+  };
+
+  const isYouTubeWatchPage = () => {
+    if (!isYouTubeHost()) {
+      return false;
+    }
+
+    const path = window.location.pathname;
+    return (
+      path === '/watch' ||
+      path.startsWith('/shorts/') ||
+      hostAllowsEmbedTranscript(path)
+    );
+  };
+
+  const hostAllowsEmbedTranscript = (path) =>
+    path.startsWith('/embed/') || path.startsWith('/live/');
+
+  const getVideoTitle = () => {
+    const pageTitle = text(
+      query('ytd-watch-metadata h1 yt-formatted-string, h1.ytd-watch-metadata')
+    );
+
+    if (pageTitle) {
+      return pageTitle;
+    }
+
+    const ogTitle = doc
+      .querySelector('meta[property="og:title"]')
+      ?.getAttribute('content')
+      ?.trim();
+
+    if (ogTitle) {
+      return ogTitle;
+    }
+
+    return doc.title.replace(/\s*-\s*YouTube\s*$/i, '').trim() || 'Video';
+  };
+
+  const sanitizeFilename = (value) =>
+    value
+      .replace(/[<>:"/\\|?*\u0000-\u001f]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 160) || 'Video';
+
+  const downloadTranscript = ({ title, transcriptText }) => {
+    const blob = new Blob([transcriptText], {
+      type: 'text/plain;charset=utf-8',
+    });
+    const url = URL.createObjectURL(blob);
+    const link = doc.createElement('a');
+
+    link.href = url;
+    link.download = `YT Transcript — ${sanitizeFilename(title)}.txt`;
+    link.style.display = 'none';
+    doc.body.append(link);
+    link.click();
+    link.remove();
+
+    window.setTimeout(() => {
+      URL.revokeObjectURL(url);
+    }, 1000);
+  };
+
+  const showToast = ({ tone, title, detail, subdetail = '', actions = [] }) => {
     ensureStyle();
 
-    query(`#${runtimeId}`)?.remove();
+    if (!activeToast) {
+      const toast = doc.createElement('section');
+      const row = doc.createElement('div');
+      const icon = doc.createElement('div');
+      const content = doc.createElement('div');
+      const kicker = doc.createElement('p');
+      const titleNode = doc.createElement('p');
+      const detailNode = doc.createElement('p');
+      const subdetailNode = doc.createElement('p');
+      const actionsNode = doc.createElement('div');
+      let timeoutId = 0;
+      let detached = false;
 
-    const toast = doc.createElement('section');
-    const row = doc.createElement('div');
-    const icon = doc.createElement('div');
-    const content = doc.createElement('div');
-    const kicker = doc.createElement('p');
-    const titleNode = doc.createElement('p');
-    const detailNode = doc.createElement('p');
+      toast.id = runtimeId;
+      row.className = 'ytc-row';
+      icon.className = 'ytc-icon';
+      kicker.className = 'ytc-kicker';
+      titleNode.className = 'ytc-title';
+      detailNode.className = 'ytc-detail';
+      subdetailNode.className = 'ytc-subdetail';
+      actionsNode.className = 'ytc-actions';
 
-    toast.id = runtimeId;
+      row.append(icon, content);
+      toast.append(row);
+      doc.documentElement.append(toast);
+      requestAnimationFrame(() => {
+        toast.dataset.visible = 'true';
+      });
+
+      const onPointerDown = (event) => {
+        if (!toast.contains(event.target)) {
+          remove();
+        }
+      };
+
+      const onKeyDown = (event) => {
+        if (event.key === 'Escape') {
+          remove();
+        }
+      };
+
+      const remove = () => {
+        if (detached) {
+          return;
+        }
+
+        detached = true;
+        clearTimeout(timeoutId);
+        doc.removeEventListener('pointerdown', onPointerDown, true);
+        doc.removeEventListener('keydown', onKeyDown, true);
+        toast.remove();
+        if (activeToast?.element === toast) {
+          activeToast = null;
+        }
+      };
+
+      const scheduleRemoval = (ms) => {
+        clearTimeout(timeoutId);
+        timeoutId = window.setTimeout(remove, ms);
+      };
+
+      const clearRemoval = () => {
+        clearTimeout(timeoutId);
+      };
+
+      doc.addEventListener('pointerdown', onPointerDown, true);
+      doc.addEventListener('keydown', onKeyDown, true);
+
+      activeToast = {
+        actionsNode,
+        content,
+        clearRemoval,
+        detailNode,
+        element: toast,
+        icon,
+        kicker,
+        remove,
+        scheduleRemoval,
+        subdetailNode,
+        titleNode,
+      };
+    }
+
+    const toast = activeToast.element;
+    const {
+      actionsNode,
+      clearRemoval,
+      content,
+      detailNode,
+      icon,
+      kicker,
+      subdetailNode,
+      titleNode,
+    } = activeToast;
+
+    clearRemoval();
     toast.dataset.tone = tone;
     toast.setAttribute('role', tone === 'error' ? 'alert' : 'status');
     toast.setAttribute('aria-live', tone === 'error' ? 'assertive' : 'polite');
 
-    row.className = 'ytc-row';
-    icon.className = 'ytc-icon';
-    kicker.className = 'ytc-kicker';
-    titleNode.className = 'ytc-title';
-    detailNode.className = 'ytc-detail';
-
+    icon.replaceChildren();
     if (tone === 'loading') {
       const spinner = doc.createElement('div');
       spinner.className = 'ytc-spinner';
@@ -233,56 +433,42 @@
       icon.append(symbol);
     }
 
-    kicker.textContent = 'Transcript Copier';
+    const kickerLink = doc.createElement('a');
+    kickerLink.className = 'ytc-kicker-link';
+    kickerLink.href = homeUrl;
+    kickerLink.target = '_blank';
+    kickerLink.rel = 'noreferrer noopener';
+    kickerLink.textContent = 'YT Transcript Copier ↗';
+
+    kicker.replaceChildren(kickerLink);
     titleNode.textContent = title;
     detailNode.textContent = detail;
+    subdetailNode.textContent = subdetail;
+    actionsNode.replaceChildren();
+    content.replaceChildren(kicker, titleNode, detailNode);
 
-    content.append(kicker, titleNode, detailNode);
-    row.append(icon, content);
-    toast.append(row);
+    if (subdetail) {
+      content.append(subdetailNode);
+    }
 
-    doc.documentElement.append(toast);
-    requestAnimationFrame(() => {
-      toast.dataset.visible = 'true';
-    });
+    if (actions.length) {
+      actions.forEach((action) => {
+        const button = doc.createElement('button');
+        button.className = 'ytc-action';
+        button.type = 'button';
+        button.textContent = action.label;
+        button.addEventListener('click', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          action.onClick();
+        });
+        actionsNode.append(button);
+      });
 
-    let timeoutId = 0;
-    let detached = false;
+      content.append(actionsNode);
+    }
 
-    const onPointerDown = (event) => {
-      if (!toast.contains(event.target)) {
-        remove();
-      }
-    };
-
-    const onKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        remove();
-      }
-    };
-
-    const remove = () => {
-      if (detached) {
-        return;
-      }
-
-      detached = true;
-      clearTimeout(timeoutId);
-      doc.removeEventListener('pointerdown', onPointerDown, true);
-      doc.removeEventListener('keydown', onKeyDown, true);
-      toast.remove();
-    };
-
-    const scheduleRemoval = (ms) => {
-      clearTimeout(timeoutId);
-      timeoutId = window.setTimeout(remove, ms);
-    };
-
-    doc.addEventListener('pointerdown', onPointerDown, true);
-    doc.addEventListener('keydown', onKeyDown, true);
-    toast.addEventListener('click', remove);
-
-    return { remove, scheduleRemoval };
+    return activeToast;
   };
 
   const closeTranscriptPanel = async () => {
@@ -360,13 +546,13 @@
     textarea.remove();
 
     if (execCommandSucceeded) {
-      return { usedFallback: true };
+      return;
     }
 
     try {
       if (nav.clipboard?.writeText) {
         await nav.clipboard.writeText(value);
-        return { usedFallback: false, prompted: true };
+        return;
       }
     } catch (_error) {
       // Fall through to the error below.
@@ -377,53 +563,166 @@
 
   const describeError = (error) => {
     switch (error?.message) {
+      case 'not-youtube':
+        return {
+          detail: 'Open a YouTube video page first.',
+          subdetail: '',
+        };
+      case 'not-video-page':
+        return {
+          detail: 'Use this on a YouTube video page.',
+          subdetail: '',
+        };
       case 'timeout':
-        return 'YouTube did not expose transcript controls in time. Try reopening the transcript or refreshing the page.';
+        return {
+          detail: 'YouTube did not expose transcript controls in time.',
+          subdetail: 'Try again, or refresh the page and reopen the video.',
+        };
       case 'copy-failed':
-        return 'Clipboard access was blocked. Try clicking the bookmark again after interacting with the page.';
+        return {
+          detail: 'Clipboard access was blocked.',
+          subdetail: 'Interact with the page, then try again.',
+        };
       case 'missing-transcript-lines':
-        return 'A transcript panel opened, but no transcript lines were available to copy.';
+        return {
+          detail: 'A transcript panel opened, but no transcript lines were available.',
+          subdetail: '',
+        };
       default:
-        return 'This video may not expose a transcript, or YouTube changed its transcript layout.';
+        return {
+          detail: 'This video may not expose a transcript.',
+          subdetail: 'Try the latest bookmarklet.',
+        };
     }
   };
 
-  const loadingToast = showToast({
-    tone: 'loading',
-    title: 'Collecting transcript',
-    detail: 'Opening the transcript panel and preparing text for copy.',
-  });
+  const run = async () => {
+    activeRunId += 1;
+    const runId = activeRunId;
+    const attemptNumber = runId;
 
-  try {
-    const transcript = await collectTranscript();
-    const copyResult = await copyToClipboard(transcript.text);
-    const rangeLabel =
-      transcript.firstTimestamp && transcript.lastTimestamp
-        ? ` ${transcript.firstTimestamp} - ${transcript.lastTimestamp}.`
-        : '';
+    if (!isYouTubeHost()) {
+      const invalidSiteToast = showToast({
+        tone: 'error',
+        title: 'Not a YouTube page',
+        detail: 'Open a YouTube video page first.',
+        actions: [
+          { label: 'Get bookmarklet', onClick: () => window.open(homeUrl, '_blank', 'noopener,noreferrer') },
+        ],
+      });
 
-    loadingToast.remove();
-    await closeTranscriptPanel();
+      invalidSiteToast.scheduleRemoval(9000);
+      throw new Error('not-youtube');
+    }
 
-    const successToast = showToast({
-      tone: 'success',
-      title: 'Transcript copied',
-      detail: `${transcript.lines.length} lines copied.${rangeLabel}${copyResult.usedFallback ? ' Copied without a browser permission prompt.' : ' Copied to your clipboard.'}`,
+    if (!isYouTubeWatchPage()) {
+      const invalidPageToast = showToast({
+        tone: 'error',
+        title: 'Open a video first',
+        detail: 'Use this on a YouTube video page.',
+        actions: [
+          { label: 'Get bookmarklet', onClick: () => window.open(homeUrl, '_blank', 'noopener,noreferrer') },
+        ],
+      });
+
+      invalidPageToast.scheduleRemoval(9000);
+      throw new Error('not-video-page');
+    }
+
+    const slowTimerId = window.setTimeout(() => {
+      if (runId !== activeRunId) {
+        return;
+      }
+
+      showToast({
+        tone: 'loading',
+        title: 'Still collecting transcript',
+        detail: 'YouTube is taking longer than usual.',
+        subdetail: 'You can wait a little longer, try again, or refresh the page.',
+        actions: [
+          { label: 'Try again', onClick: () => void run() },
+          { label: 'Refresh page', onClick: () => window.location.reload() },
+        ],
+      });
+    }, 7000);
+
+    showToast({
+      tone: 'loading',
+      title: 'Collecting transcript',
+      detail: 'Opening the transcript panel and preparing text for copy.',
     });
 
-    successToast.scheduleRemoval(4200);
-    return transcript.text;
-  } catch (error) {
-    loadingToast.remove();
-    await closeTranscriptPanel();
+    try {
+      const transcript = await collectTranscript();
+      const videoTitle = getVideoTitle();
+      await copyToClipboard(transcript.text);
 
-    const failureToast = showToast({
-      tone: 'error',
-      title: 'Transcript unavailable',
-      detail: describeError(error),
-    });
+      if (runId !== activeRunId) {
+        return transcript.text;
+      }
 
-    failureToast.scheduleRemoval(7200);
-    throw error;
-  }
+      window.clearTimeout(slowTimerId);
+      await closeTranscriptPanel();
+
+      const successToast = showToast({
+        tone: 'success',
+        title: 'Transcript copied',
+        detail:
+          transcript.firstTimestamp && transcript.lastTimestamp
+            ? `${transcript.lines.length} lines copied. ${transcript.firstTimestamp} - ${transcript.lastTimestamp}.`
+            : `${transcript.lines.length} lines copied.`,
+        actions: [
+          {
+            label: 'Download Transcript',
+            onClick: () =>
+              downloadTranscript({
+                title: videoTitle,
+                transcriptText: transcript.text,
+              }),
+          },
+        ],
+      });
+
+      successToast.scheduleRemoval(12000);
+      return transcript.text;
+    } catch (error) {
+      if (runId !== activeRunId) {
+        throw error;
+      }
+
+      window.clearTimeout(slowTimerId);
+      await closeTranscriptPanel();
+
+      const failure = describeError(error);
+      const failureToast = showToast({
+        tone: 'error',
+        title: 'Transcript unavailable',
+        detail: failure.detail,
+        subdetail:
+          attemptNumber > 1 && isYouTubeHost()
+            ? failure.subdetail || 'Try the latest bookmarklet.'
+            : failure.subdetail,
+        actions:
+          attemptNumber > 1 && isYouTubeHost()
+            ? [
+                { label: 'Try again', onClick: () => void run() },
+                { label: 'Refresh page', onClick: () => window.location.reload() },
+                {
+                  label: 'Update bookmarklet',
+                  onClick: () =>
+                    window.open(homeUrl, '_blank', 'noopener,noreferrer'),
+                },
+              ]
+            : [
+                { label: 'Try again', onClick: () => void run() },
+                { label: 'Refresh page', onClick: () => window.location.reload() },
+              ],
+      });
+
+      failureToast.scheduleRemoval(9000);
+      throw error;
+    }
+  };
+
+  await run();
 })();
