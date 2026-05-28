@@ -4,7 +4,7 @@ export function NotesPanel() {
       <section className="note">
         <h2>Steps</h2>
         <ol className="steps-list" id="bookmarklet-help">
-          <li>Drag to bookmarks bar</li>
+          <li>Drag bookmarklet to bar</li>
           <li>Open YouTube Video</li>
           <li>Click the bookmarklet</li>
         </ol>

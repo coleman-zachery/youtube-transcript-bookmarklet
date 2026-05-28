@@ -1,56 +1,39 @@
 # YouTube Transcript Copier
 
-Local-first bookmarklet for copying YouTube transcripts without an extension, backend, or permissions prompt.
+[Open the bookmarklet page](https://coleman-zachery.github.io/youtube-transcript-bookmarklet/) · [GitHub Public Repo](https://github.com/coleman-zachery/youtube-transcript-bookmarklet)
 
-![YouTube Transcript Copier preview](./app/public/brandmark.svg)
+Copy YouTube transcripts with a bookmarklet.
 
-## Why this exists
-
-YouTube now blocks the old pattern of injecting remote scripts into video pages. This project keeps the bookmarklet fully inline so it remains compatible with modern Trusted Types and CSP restrictions.
-
-## What you get
-
-- Fully inline bookmarklet runtime
-- No extension install flow
-- No analytics, backend, or account
-- Works from GitHub Pages
-- Simple SVG branding with no asset-generation step
+Entirely local. No extensions. No sign-ups. No uploads.
 
 ## Install
 
-1. Open the published microsite.
-2. Show your bookmarks bar with `Ctrl` + `Shift` + `B` on Chrome.
-3. Drag `Copy Transcript` into the bookmarks bar.
-4. Open a YouTube video page and click the bookmark.
+1. Open the [public site](https://coleman-zachery.github.io/youtube-transcript-bookmarklet/).
+2. Show your bookmarks bar with `Ctrl` + `Shift` + `B`.
+3. Drag `▶ Copy YT Transcript` into the bookmarks bar.
+4. Open a YouTube video and click the bookmarklet.
 
-## Local development
+## What It Does
+
+- Copies transcript text from YouTube video pages
+- Lets you download the transcript as a `.txt` file
+- Runs entirely in your browser
+
+## Privacy
+
+Transcript text never leaves your browser.
+
+## Development
 
 ```bash
-cd app
-npm install
-npm run dev
+make
 ```
 
-`npm run dev` regenerates the bookmarklet module before startup. The Vite plugin also rebuilds the generated bookmarklet whenever `app/public/youtube-transcript.js` changes.
+That runs the app from `app/`.
 
-## Build and deploy
+To build the static site:
 
 ```bash
 cd app
 npm run build
 ```
-
-The GitHub Pages workflow installs dependencies in `app/`, builds the Vite app, and publishes `app/dist`.
-
-## Architecture
-
-- `app/public/youtube-transcript.js`
-  The actual runtime that executes inside YouTube pages.
-- `app/scripts/build-bookmarklet.mjs`
-  Minifies the runtime, validates it, and writes `app/src/bookmarklet.ts`.
-- `app/src/main.ts`
-  Renders the microsite and injects the bookmarklet href into the primary CTA.
-
-## Privacy
-
-Transcript text never leaves the browser. The site has no backend, no tracking, and no extension permissions surface.

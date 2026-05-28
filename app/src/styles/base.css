@@ -22,9 +22,58 @@ body {
   width: 100%;
 }
 
+body.is-dragging-bookmarklet,
+body.is-dragging-bookmarklet * {
+  cursor: grabbing !important;
+}
+
+.github-link {
+  position: fixed;
+  top: 14px;
+  left: 14px;
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid rgba(143, 160, 189, 0.16);
+  border-radius: 999px;
+  background: rgba(13, 19, 35, 0.88);
+  color: #dbe4f4;
+  font-size: 0.86rem;
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.16);
+  backdrop-filter: blur(12px);
+}
+
+.github-link:hover,
+.github-link:focus-visible {
+  background: rgba(18, 26, 46, 0.96);
+  color: #f8fafc;
+}
+
+.github-link:focus-visible {
+  outline: 2px solid rgba(46, 211, 246, 0.35);
+  outline-offset: 2px;
+}
+
+.github-link__icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
 @media (max-width: 720px) {
   body {
     padding: 12px;
     overflow: auto;
+  }
+
+  .github-link {
+    top: 10px;
+    left: 10px;
+    padding: 7px 10px;
+    font-size: 0.8rem;
   }
 }

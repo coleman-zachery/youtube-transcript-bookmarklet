@@ -1,5 +1,44 @@
+.bookmarklet-slot {
+  position: relative;
+  display: inline-grid;
+  width: max-content;
+  max-width: 100%;
+}
+
+.bookmarklet-slot > * {
+  grid-area: 1 / 1;
+}
+
+.bookmarklet-home {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 56px;
+  padding: 0 24px;
+  border: 1px dashed rgba(46, 211, 246, 0.34);
+  border-radius: 999px;
+  color: rgba(184, 196, 217, 0.8);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: rgba(9, 13, 24, 0.34);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 120ms ease,
+    visibility 120ms ease;
+}
+
+.bookmarklet-home.is-active {
+  opacity: 1;
+  visibility: visible;
+}
+
 .bookmarklet {
   position: relative;
+  isolation: isolate;
   display: inline-flex;
   align-items: center;
   width: max-content;
@@ -15,12 +54,59 @@
   letter-spacing: -0.02em;
   text-decoration: none;
   box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.12),
     0 9px 20px rgba(8, 15, 31, 0.18),
     inset 0 1px 0 rgba(255, 255, 255, 0.78);
   transition:
     transform 180ms ease,
     box-shadow 180ms ease,
     background-color 180ms ease;
+}
+
+.bookmarklet::after {
+  content: "";
+  position: absolute;
+  inset: -14px -18px;
+  z-index: -1;
+  border-radius: 999px;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at center, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.26) 42%, rgba(255, 255, 255, 0) 76%);
+  filter: blur(14px);
+  opacity: 0.62;
+  transform: scale(1);
+  mix-blend-mode: normal;
+}
+
+.bookmarklet:hover,
+.bookmarklet:focus-visible {
+  transform: translateY(-2px);
+  box-shadow:
+    0 0 0 1px rgba(46, 211, 246, 0.22),
+    0 0 28px rgba(46, 211, 246, 0.18),
+    0 12px 24px rgba(8, 15, 31, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.78);
+}
+
+.bookmarklet:active {
+  cursor: grabbing;
+}
+
+.bookmarklet--drag-preview {
+  position: fixed;
+  z-index: 40;
+  margin: 0;
+  cursor: grabbing;
+  pointer-events: none;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.18),
+    0 18px 34px rgba(4, 10, 24, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.78);
+}
+
+.bookmarklet--drag-preview::after {
+  opacity: 0.82;
+  transform: scale(1.06);
 }
 
 .bookmarklet::before {
@@ -45,7 +131,17 @@
   background-size: 100% 100%;
 }
 
+.workspace.is-dragging-bookmarklet #bookmarklet-link {
+  opacity: 0;
+}
+
 @media (max-width: 720px) {
+  .bookmarklet-home {
+    min-height: 56px;
+    padding: 0 20px;
+    font-size: 0.76rem;
+  }
+
   .bookmarklet {
     width: max-content;
     max-width: 100%;
