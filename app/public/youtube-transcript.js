@@ -10,9 +10,12 @@
   const homeUrl = 'https://coleman-zachery.github.io/youtube-transcript-bookmarklet/';
   let activeToast = null;
   let activeRunId = 0;
+
   const transcriptPanelSelectors = [
     'ytd-engagement-panel-section-list-renderer[target-id="PAmodern_transcript_view"]',
     'ytd-engagement-panel-section-list-renderer[target-id="engagement-panel-searchable-transcript"]',
+    'ytd-engagement-panel-section-list-renderer:has([data-target-id="PAmodern_transcript_view"])',
+    'ytd-engagement-panel-section-list-renderer:has(transcript-segment-view-model)',
   ];
 
   const waitFor = async (getter, timeoutMs = 18000) => {
@@ -20,11 +23,7 @@
 
     while (Date.now() < deadline) {
       const value = typeof getter === 'function' ? getter() : query(getter);
-
-      if (value) {
-        return value;
-      }
-
+      if (value) return value;
       await delay(140);
     }
 
@@ -32,9 +31,7 @@
   };
 
   const ensureStyle = () => {
-    if (query(`#${styleId}`)) {
-      return;
-    }
+    if (query(`#${styleId}`)) return;
 
     const style = doc.createElement('style');
     const reduceMotion = matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -73,17 +70,9 @@
         background: var(--toast-accent, #2ed3f6);
       }
 
-      #${runtimeId}[data-tone="success"] {
-        --toast-accent: #7dd3a6;
-      }
-
-      #${runtimeId}[data-tone="error"] {
-        --toast-accent: #f97373;
-      }
-
-      #${runtimeId}[data-tone="loading"] {
-        --toast-accent: #38bdf8;
-      }
+      #${runtimeId}[data-tone="success"] { --toast-accent: #7dd3a6; }
+      #${runtimeId}[data-tone="error"] { --toast-accent: #f97373; }
+      #${runtimeId}[data-tone="loading"] { --toast-accent: #38bdf8; }
 
       .ytc-row {
         display: grid;
@@ -105,10 +94,7 @@
         font-weight: 700;
       }
 
-      .ytc-kicker,
-      .ytc-title,
-      .ytc-detail,
-      .ytc-subdetail {
+      .ytc-kicker, .ytc-title, .ytc-detail, .ytc-subdetail {
         margin: 0;
       }
 
@@ -186,9 +172,7 @@
       }
 
       @keyframes ytc-spin {
-        to {
-          transform: rotate(360deg);
-        }
+        to { transform: rotate(360deg); }
       }
     `;
 
@@ -201,44 +185,77 @@
     node.getAttribute('visibility') !== 'ENGAGEMENT_PANEL_VISIBILITY_HIDDEN' &&
     (node.offsetParent !== null || getComputedStyle(node).display !== 'none');
 
-  const getTranscriptPanel = () =>
-    transcriptPanelSelectors
-      .flatMap((selector) => queryAll(selector))
-      .find(isVisible) ||
-    queryAll('ytd-engagement-panel-section-list-renderer').find((panel) => {
-      if (!isVisible(panel)) {
-        return false;
-      }
+  const getTranscriptPanel = () => {
+    const fromSelectors = transcriptPanelSelectors
+      .flatMap((selector) => {
+        try {
+          return queryAll(selector);
+        } catch {
+          return [];
+        }
+      })
+      .find(isVisible);
 
-      const title = text(
-        query('#title-text, #title, h2[aria-label], [aria-label="Transcript"]', panel)
-      ).toLowerCase();
+    if (fromSelectors) return fromSelectors;
 
-      return title === 'transcript' || title.includes('transcript');
-    }) ||
-    null;
+    return (
+      queryAll('ytd-engagement-panel-section-list-renderer').find((panel) => {
+        if (!isVisible(panel)) return false;
+
+        const hasModernTranscript = query(
+          '[data-target-id="PAmodern_transcript_view"], transcript-segment-view-model',
+          panel
+        );
+
+        const title = text(
+          query('#title-text, #title, h2[aria-label], [aria-label="Transcript"]', panel)
+        ).toLowerCase();
+
+        const selectedTranscriptChip = query(
+          'button[role="tab"][aria-selected="true"], button[aria-selected="true"]',
+          panel
+        );
+
+        return (
+          hasModernTranscript ||
+          title.includes('transcript') ||
+          text(selectedTranscriptChip).toLowerCase().includes('transcript')
+        );
+      }) || null
+    );
+  };
 
   const getTranscriptSegments = (panel) => {
     const modernSegments = queryAll('transcript-segment-view-model', panel);
 
     if (modernSegments.length) {
-      return modernSegments.map((segment) => ({
-        timestamp: text(
-          query('.ytwTranscriptSegmentViewModelTimestamp, [class*="TranscriptSegmentViewModelTimestamp"]', segment)
-        ),
-        content: text(
-          query('[role="text"], .ytAttributedStringHost, span', segment)
-        ),
-      }));
+      return modernSegments
+        .map((segment) => ({
+          timestamp: text(
+            query(
+              '.ytwTranscriptSegmentViewModelTimestamp:not(.ytwTranscriptSegmentViewModelTimestampA11yLabel), [class*="TranscriptSegmentViewModelTimestamp"]:not([class*="A11y"])',
+              segment
+            )
+          ),
+          content: text(
+            query(
+              '[role="text"].ytAttributedStringHost, .ytAttributedStringHost[role="text"], [role="text"]',
+              segment
+            )
+          ),
+        }))
+        .filter((segment) => segment.timestamp || segment.content);
     }
 
     const legacySegments = queryAll('ytd-transcript-segment-renderer', panel);
 
     if (legacySegments.length) {
-      return legacySegments.map((segment) => ({
-        timestamp: text(query('.segment-timestamp', segment)),
-        content: text(query('.segment-text', segment)),
-      }));
+      return legacySegments
+        .map((segment) => ({
+          timestamp: text(query('.segment-timestamp, #timestamp', segment)),
+          content: text(query('.segment-text, #segment-text, yt-formatted-string', segment)),
+        }))
+        .filter((segment) => segment.timestamp || segment.content);
     }
 
     return [];
@@ -254,39 +271,29 @@
     );
   };
 
-  const isYouTubeWatchPage = () => {
-    if (!isYouTubeHost()) {
-      return false;
-    }
-
-    const path = window.location.pathname;
-    return (
-      path === '/watch' ||
-      path.startsWith('/shorts/') ||
-      hostAllowsEmbedTranscript(path)
-    );
-  };
-
   const hostAllowsEmbedTranscript = (path) =>
     path.startsWith('/embed/') || path.startsWith('/live/');
+
+  const isYouTubeWatchPage = () => {
+    if (!isYouTubeHost()) return false;
+
+    const path = window.location.pathname;
+    return path === '/watch' || path.startsWith('/shorts/') || hostAllowsEmbedTranscript(path);
+  };
 
   const getVideoTitle = () => {
     const pageTitle = text(
       query('ytd-watch-metadata h1 yt-formatted-string, h1.ytd-watch-metadata')
     );
 
-    if (pageTitle) {
-      return pageTitle;
-    }
+    if (pageTitle) return pageTitle;
 
     const ogTitle = doc
       .querySelector('meta[property="og:title"]')
       ?.getAttribute('content')
       ?.trim();
 
-    if (ogTitle) {
-      return ogTitle;
-    }
+    if (ogTitle) return ogTitle;
 
     return doc.title.replace(/\s*-\s*YouTube\s*$/i, '').trim() || 'Video';
   };
@@ -312,9 +319,7 @@
     link.click();
     link.remove();
 
-    window.setTimeout(() => {
-      URL.revokeObjectURL(url);
-    }, 1000);
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   const showToast = ({ tone, title, detail, subdetail = '', actions = [] }) => {
@@ -345,32 +350,28 @@
       row.append(icon, content);
       toast.append(row);
       doc.documentElement.append(toast);
+
       requestAnimationFrame(() => {
         toast.dataset.visible = 'true';
       });
 
       const onPointerDown = (event) => {
-        if (!toast.contains(event.target)) {
-          remove();
-        }
+        if (!toast.contains(event.target)) remove();
       };
 
       const onKeyDown = (event) => {
-        if (event.key === 'Escape') {
-          remove();
-        }
+        if (event.key === 'Escape') remove();
       };
 
       const remove = () => {
-        if (detached) {
-          return;
-        }
+        if (detached) return;
 
         detached = true;
         clearTimeout(timeoutId);
         doc.removeEventListener('pointerdown', onPointerDown, true);
         doc.removeEventListener('keydown', onKeyDown, true);
         toast.remove();
+
         if (activeToast?.element === toast) {
           activeToast = null;
         }
@@ -381,9 +382,7 @@
         timeoutId = window.setTimeout(remove, ms);
       };
 
-      const clearRemoval = () => {
-        clearTimeout(timeoutId);
-      };
+      const clearRemoval = () => clearTimeout(timeoutId);
 
       doc.addEventListener('pointerdown', onPointerDown, true);
       doc.addEventListener('keydown', onKeyDown, true);
@@ -421,6 +420,7 @@
     toast.setAttribute('aria-live', tone === 'error' ? 'assertive' : 'polite');
 
     icon.replaceChildren();
+
     if (tone === 'loading') {
       const spinner = doc.createElement('div');
       spinner.className = 'ytc-spinner';
@@ -447,9 +447,7 @@
     actionsNode.replaceChildren();
     content.replaceChildren(kicker, titleNode, detailNode);
 
-    if (subdetail) {
-      content.append(subdetailNode);
-    }
+    if (subdetail) content.append(subdetailNode);
 
     if (actions.length) {
       actions.forEach((action) => {
@@ -476,15 +474,47 @@
     getTranscriptPanel()
       ?.querySelector('button[aria-label*="Close"], button[aria-label*="close"]')
       ?.click();
+
     query('#description-inline-expander #collapse')?.click();
   };
 
   const findTranscriptButton = () =>
-    queryAll('button').find((button) => {
-      const label = `${button.getAttribute('aria-label') || ''} ${text(button)}`.toLowerCase();
+    queryAll('button, tp-yt-paper-button, ytd-button-renderer, chip-shape button').find(
+      (button) => {
+        const label = `${button.getAttribute('aria-label') || ''} ${text(button)}`.toLowerCase();
 
-      return label.includes('transcript') && (label.includes('show') || label.includes('open'));
-    });
+        return (
+          label.includes('transcript') &&
+          !label.includes('search transcript') &&
+          !label.includes('close')
+        );
+      }
+    );
+
+  const revealMoreTranscriptSegments = async (panel) => {
+    const scroller =
+      query('yt-section-list-renderer[panel-content-visible]', panel) ||
+      query('.ytSectionListRendererHostEnableScroll', panel) ||
+      query('#content, #contents', panel) ||
+      panel;
+
+    let previousCount = 0;
+
+    for (let i = 0; i < 8; i += 1) {
+      const count = queryAll(
+        'transcript-segment-view-model, ytd-transcript-segment-renderer',
+        panel
+      ).length;
+
+      if (count && count === previousCount) break;
+
+      previousCount = count;
+      scroller.scrollTop = scroller.scrollHeight;
+      await delay(180);
+    }
+
+    scroller.scrollTop = 0;
+  };
 
   const collectTranscript = async () => {
     query('#description-inline-expander #expand')?.click();
@@ -495,6 +525,9 @@
     }
 
     const panel = await waitFor(getTranscriptPanel, 16000);
+
+    await revealMoreTranscriptSegments(panel);
+
     const segments = await waitFor(() => {
       const items = getTranscriptSegments(panel);
       return items.length ? items : null;
@@ -504,6 +537,7 @@
       .map((segment) => {
         const timestamp = segment.timestamp || '';
         const content = segment.content || '';
+
         return {
           timestamp,
           line: [timestamp, content].filter(Boolean).join(' '),
@@ -511,9 +545,7 @@
       })
       .filter((entry) => entry.line);
 
-    const lines = entries
-      .map((entry) => entry.line)
-      .filter(Boolean);
+    const lines = entries.map((entry) => entry.line).filter(Boolean);
 
     if (!lines.length) {
       throw new Error('missing-transcript-lines');
@@ -542,21 +574,16 @@
     textarea.setSelectionRange(0, textarea.value.length);
 
     const execCommandSucceeded = doc.execCommand('copy');
-
     textarea.remove();
 
-    if (execCommandSucceeded) {
-      return;
-    }
+    if (execCommandSucceeded) return;
 
     try {
       if (nav.clipboard?.writeText) {
         await nav.clipboard.writeText(value);
         return;
       }
-    } catch (_error) {
-      // Fall through to the error below.
-    }
+    } catch (_error) {}
 
     throw new Error('copy-failed');
   };
@@ -607,7 +634,10 @@
         title: 'Not a YouTube page',
         detail: 'Open a YouTube video page first.',
         actions: [
-          { label: 'Get bookmarklet', onClick: () => window.open(homeUrl, '_blank', 'noopener,noreferrer') },
+          {
+            label: 'Get bookmarklet',
+            onClick: () => window.open(homeUrl, '_blank', 'noopener,noreferrer'),
+          },
         ],
       });
 
@@ -621,7 +651,10 @@
         title: 'Open a video first',
         detail: 'Use this on a YouTube video page.',
         actions: [
-          { label: 'Get bookmarklet', onClick: () => window.open(homeUrl, '_blank', 'noopener,noreferrer') },
+          {
+            label: 'Get bookmarklet',
+            onClick: () => window.open(homeUrl, '_blank', 'noopener,noreferrer'),
+          },
         ],
       });
 
@@ -630,9 +663,7 @@
     }
 
     const slowTimerId = window.setTimeout(() => {
-      if (runId !== activeRunId) {
-        return;
-      }
+      if (runId !== activeRunId) return;
 
       showToast({
         tone: 'loading',
@@ -655,11 +686,10 @@
     try {
       const transcript = await collectTranscript();
       const videoTitle = getVideoTitle();
+
       await copyToClipboard(transcript.text);
 
-      if (runId !== activeRunId) {
-        return transcript.text;
-      }
+      if (runId !== activeRunId) return transcript.text;
 
       window.clearTimeout(slowTimerId);
       await closeTranscriptPanel();
@@ -686,9 +716,7 @@
       successToast.scheduleRemoval(12000);
       return transcript.text;
     } catch (error) {
-      if (runId !== activeRunId) {
-        throw error;
-      }
+      if (runId !== activeRunId) throw error;
 
       window.clearTimeout(slowTimerId);
       await closeTranscriptPanel();
@@ -709,8 +737,7 @@
                 { label: 'Refresh page', onClick: () => window.location.reload() },
                 {
                   label: 'Update bookmarklet',
-                  onClick: () =>
-                    window.open(homeUrl, '_blank', 'noopener,noreferrer'),
+                  onClick: () => window.open(homeUrl, '_blank', 'noopener,noreferrer'),
                 },
               ]
             : [
