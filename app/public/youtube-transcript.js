@@ -478,18 +478,55 @@
     query('#description-inline-expander #collapse')?.click();
   };
 
-  const findTranscriptButton = () =>
-    queryAll('button, tp-yt-paper-button, ytd-button-renderer, chip-shape button').find(
-      (button) => {
-        const label = `${button.getAttribute('aria-label') || ''} ${text(button)}`.toLowerCase();
+  const transcriptButtonSelectors = [
+    'ytd-video-description-transcript-section-renderer button[aria-label="Show transcript"]',
+    'ytd-video-description-transcript-section-renderer button[aria-label*="transcript" i]',
+    'ytd-video-description-transcript-section-renderer yt-button-shape button',
+    'button[aria-label="Show transcript"]',
+    'button[aria-label*="transcript" i]',
+    'button-view-model button[aria-label*="transcript" i]',
+    'chip-shape button[aria-label*="transcript" i]',
+  ];
 
-        return (
-          label.includes('transcript') &&
-          !label.includes('search transcript') &&
-          !label.includes('close')
-        );
-      }
+  const isClickable = (node) =>
+    !!node &&
+    isVisible(node) &&
+    !node.disabled &&
+    node.getAttribute('aria-disabled') !== 'true';
+
+  const isTranscriptOpenButton = (button) => {
+    const label = `${button.getAttribute('aria-label') || ''} ${text(button)}`.toLowerCase();
+
+    return (
+      label.includes('transcript') &&
+      !label.includes('search transcript') &&
+      !label.includes('close') &&
+      !label.includes('hide')
     );
+  };
+
+  const findTranscriptButton = () => {
+    for (const selector of transcriptButtonSelectors) {
+      const match = queryAll(selector).find(
+        (button) => isClickable(button) && isTranscriptOpenButton(button)
+      );
+
+      if (match) return match;
+    }
+
+    return queryAll('ytd-video-description-transcript-section-renderer, ytd-button-renderer')
+      .map((renderer) => query('button, tp-yt-paper-button', renderer) || renderer)
+      .find((button) => isClickable(button) && isTranscriptOpenButton(button));
+  };
+
+  const clickElement = (element) => {
+    element.scrollIntoView?.({ block: 'center', inline: 'center' });
+    element.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+    element.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+    element.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true }));
+    element.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+    element.click();
+  };
 
   const revealMoreTranscriptSegments = async (panel) => {
     const scroller =
@@ -521,7 +558,7 @@
 
     if (!getTranscriptPanel()) {
       const transcriptButton = await waitFor(findTranscriptButton, 12000);
-      transcriptButton.click();
+      clickElement(transcriptButton);
     }
 
     const panel = await waitFor(getTranscriptPanel, 16000);
